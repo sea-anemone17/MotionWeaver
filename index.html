@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MotionWeaver</title>
+<style>
+:root{font-family:system-ui,-apple-system,sans-serif;color:#f2f3fa;background:#0d0f19}*{box-sizing:border-box}body{margin:0}main{max-width:980px;margin:auto;padding:28px 18px}h1{margin:0;font-size:2rem}p{color:#aeb3c9}.panel{background:#191d2d;border:1px solid #33384e;border-radius:18px;padding:22px;margin-top:20px}label{display:block;margin:14px 0 7px;font-weight:600}input,select{width:100%;border:1px solid #50566d;border-radius:10px;background:#101322;color:white;padding:12px;font-size:1rem}button{border:0;border-radius:12px;background:#9d8bff;color:#100e1f;font-weight:800;padding:15px 20px;cursor:pointer;width:100%;font-size:1rem;margin-top:18px}.preview{aspect-ratio:16/9;background:#05050a;border-radius:14px;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative}.letters{display:flex;align-items:center;justify-content:center;white-space:pre;font-family:Arial,sans-serif;font-weight:900;color:white;max-width:95%;font-size:clamp(24px,6vw,78px)}.letters span{display:inline-block;animation:pop .7s both;animation-delay:var(--delay)}@keyframes pop{0%{transform:scale(.03);opacity:0}65%{transform:scale(1.24);opacity:1}100%{transform:scale(1)}}.row{display:grid;grid-template-columns:1fr 1fr;gap:16px}.hint{font-size:.85rem;line-height:1.6}.status{min-height:24px;color:#b8f4ce}@media(max-width:550px){.row{grid-template-columns:1fr}main{padding:20px 12px}}
+</style></head><body><main><h1>✦ MotionWeaver <small style="font-size:.4em;color:#aeb3c9">v0.1</small></h1><p>Alight Motion용 글자별 모션그래픽 XML 생성기</p><section class="panel"><div class="preview"><div id="preview" class="letters"></div></div><p class="hint">미리보기는 브라우저의 근사 표현입니다. Alight Motion 렌더링과 차이가 있을 수 있습니다.</p><label for="words">텍스트</label><input id="words" value="POP!" maxlength="50"><div class="row"><div><label for="gap">글자 간격 (px, 4K 기준)</label><input id="gap" type="number" value="30" min="0" max="300"></div><div><label for="stagger">등장 간격 (초)</label><input id="stagger" type="number" value="0.16" min="0" max="1" step=".01"></div></div><div class="row"><div><label for="fontSize">글자 크기</label><input id="fontSize" type="number" value="210" min="20" max="500"></div><div><label for="duration">전체 길이 (초)</label><input id="duration" type="number" value="3.2" min="1" max="30" step=".1"></div></div><button id="download">XML 생성 및 다운로드</button><p id="status" class="status" role="status"></p></section><p class="hint">실험용 프로젝트입니다. 원본 XML에서 확인된 텍스트·scale·location·motion blur 구조를 사용합니다. Source Sans Pro Black 폰트가 기기에 없으면 다른 글꼴로 대체될 수 있습니다.</p></main>
+<script>
+'use strict';
+const $=id=>document.getElementById(id),W=3840,H=2160,FPS=30;
+const xmlEscape=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
+const number=(id,min,max)=>Math.min(max,Math.max(min,Number($(id).value)||min));
+const letters=s=>Array.from(s);
+function widths(chars,size){const c=document.createElement('canvas');const ctx=c.getContext('2d');ctx.font='900 '+size+'px Arial';return chars.map(ch=>Math.max(1,ctx.measureText(ch).width));}
+function layout(chars,size,gap){const ws=widths(chars,size),total=ws.reduce((a,b)=>a+b,0)+gap*Math.max(0,chars.length-1);let x=(W-total)/2;return ws.map(w=>{const mid=x+w/2;x+=w+gap;return mid;});}
+function frame(t,v,e=''){return '<kf t="'+t.toFixed(6)+'" v="'+v+'"'+(e?' e="'+e+'"':'')+' />';}
+function generate(){
+const chars=letters($('words').value);if(!chars.length)throw Error('텍스트를 입력해 주세요.');
+const gap=number('gap',0,300),stagger=number('stagger',0,1),size=number('fontSize',20,500),duration=number('duration',1,30),ms=Math.round(duration*1000),xs=layout(chars,size,gap);
+const easing='cubicBezier 0.25 0.0 0.25 1.0';
+const nodes=chars.map((ch,i)=>{
+const start=Math.round(i*stagger*1000);if(start>=ms)throw Error('등장 간격이 전체 길이보다 깁니다.');
+const pop=Math.min(ms-start,540),settle=Math.min(ms-start,850);
+const scale=[frame(0,'0.030000,0.030000'),frame(pop/1000,'1.240000,1.240000',easing),frame(settle/1000,'1.000000,1.000000',easing)].join('');
+return '<text id="'+(100+i)+'" startTime="'+start+'" endTime="'+ms+'" fillType="color" mediaFillMode="fill" size="'+size.toFixed(6)+'" font="googlefonts?name=Source Sans Pro&amp;weight=900" wrapWidth="'+Math.ceil(size*3)+'" align="center"><transform><location>'+frame(0,xs[i].toFixed(6)+','+(H/2).toFixed(6)+',0.000000')+'</location><scale>'+scale+'</scale></transform><effect id="com.alightcreative.effects.motionblur4" locallyApplied="true"><property name="tune" type="float" value="1.000000" /><property name="usePos" type="bool" value="true" /><property name="useScale" type="bool" value="true" /><property name="useAngle" type="bool" value="true" /></effect><content>'+xmlEscape(ch)+'</content></text>';
+}).join('\n');
+const result='<?xml version="1.0" encoding="UTF-8"?>\n<scene title="MotionWeaver '+xmlEscape($('words').value)+'" width="'+W+'" height="'+H+'" exportWidth="'+W+'" exportHeight="'+H+'" precompose="dynamicResolution" bgcolor="#ff000000" totalTime="'+ms+'" fps="'+FPS+'" amver="1028425" ffver="106" am="com.alightcreative.motion/5.0.273.1028425" amplatform="android" retime="freeze" retimeAdaptFPS="false">\n'+nodes+'\n</scene>';
+const parsed=new DOMParser().parseFromString(result,'application/xml');if(parsed.querySelector('parsererror'))throw Error('XML 문법 검증 실패');
+return result;
+}
+function render(){const text=$('words').value,chars=letters(text),p=$('preview');p.replaceChildren();const delay=number('stagger',0,1);p.style.gap=(number('gap',0,300)/3840*100)+'vw';for(let i=0;i<chars.length;i++){const span=document.createElement('span');span.textContent=chars[i]===' '?'\u00a0':chars[i];span.style.setProperty('--delay',(i*delay)+'s');p.appendChild(span);} }
+for(const id of ['words','gap','stagger','fontSize','duration'])$(id).addEventListener('input',render);
+$('download').addEventListener('click',()=>{try{const data=generate(),blob=new Blob([data],{type:'application/xml;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='MotionWeaver_'+Date.now()+'.xml';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);$('status').textContent='XML 생성 완료! Alight Motion에서 가져와 확인해 주세요.';}catch(e){$('status').textContent=e.message;}});
+render();
+</script></body></html>
